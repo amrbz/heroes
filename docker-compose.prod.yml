@@ -1,0 +1,25 @@
+version: "2"
+
+services:
+  server:
+    image: amrbz/heroes
+    ports:
+      - 80:80
+    depends_on:
+      - crate
+    restart: always
+    tty: true
+    stdin_open: true
+    
+  crate:
+    image: crate
+    ports:
+      - 4200:4200
+      - 4300:4300
+    environment:
+      CRATE_HEAP_SIZE: 1g
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    volumes:
+      - /mnt/data/crate/heroes:/data
+    command: crate -Cnetwork.host=_site_
+    restart: always

@@ -1,0 +1,27 @@
+version: "2"
+
+services:
+  server:
+    build: ./server
+    volumes:
+      - ./server:/opt/web
+    ports:
+      - 9000:80
+    depends_on:
+      - crate
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    
+  crate:
+    image: crate
+    ports:
+      - 4209:4200
+      - 4309:4300
+    environment:
+      CRATE_HEAP_SIZE: 1g
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    volumes:
+      - /mnt/data/crate/heroes:/data
+    command: crate -Cnetwork.host=_site_
+    restart: unless-stopped

@@ -1,0 +1,15 @@
+Flask==0.12
+crate
+cherrypy
+Flask-Script
+Flask-SSLify
+Flask-HTTPAuth
+flask-cors
+PyJWT
+pywaves
+requests
+ipfsapi
+base58
+passlib
+eventlet
+python-magic
