@@ -2,7 +2,7 @@ HEROES API
 ---
 A guide to run heroes game API server
 
-1. Copy *docker-compose.prod.yml* to your server
+1. Copy *docker-compose.prod.yml* to your server and rename it to *docker-compose.yml*
 2. Run ```docker-compose up -d```
 3. In your browser open: http://localhost:4200
 4. Using Crate database console create tables from *./server/schema.sql* file
