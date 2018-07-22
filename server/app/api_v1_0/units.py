@@ -302,7 +302,7 @@ def buy_unit():
 				))
 				data = cursor.fetchone()
 				units_descr.append({
-					'unut': {
+					'unit': {
 						'id':data[0],
 						'name':data[1],
 						'img':data[2],

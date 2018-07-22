@@ -30,6 +30,13 @@ def create_hero():
 		data = request.get_json()
 		name = data['name']
 		img = data['img']
+		clan_id = data['clan_id']
+
+		if not name:
+			return bad_request('Name is not provided')
+		if not clan_id:
+			return bad_request('Clan ID is not provided')
+
 		hero_id = str(uuid.uuid4())
 		cursor.execute("""
 			INSERT INTO heroes(
@@ -37,20 +44,35 @@ def create_hero():
 				name,
 				img,
 				balance,
+				clan_id,
 				army
 			) VALUES(
 				'{id}',
 				'{name}',
 				'{img}',
 				'{balance}',
+				'{clan_id}',
 				[]
 			)
 		""".format(
 			id=hero_id,
 			name=name,
 			img=img,
-			balance=0
+			balance=0,
+			clan_id=clan_id
 		))
+
+		cursor.execute("""
+			SELECT 
+				id,
+				name,
+				img
+			FROM clans
+			WHERE id='{clan_id}'
+		""".format(
+			clan_id=clan_id
+		))
+		clan = cursor.fetchone()
 		
 	except Exception, error:
 		print 'ERROR: ', error
@@ -65,7 +87,11 @@ def create_hero():
 		'balance': 0,
 		'img': img,
 		'army': [],
-		'clan': None
+		'clan': {
+			'id': clan[0],
+			'name': clan[1],
+			'img': clan[2]
+		}
 	}
 
 	print '\n--> Hero is saved'
@@ -116,7 +142,7 @@ def get_heroes():
 				))
 				data = cursor.fetchone()
 				units_descr.append({
-					'unut': {
+					'unit': {
 						'id':data[0],
 						'name':data[1],
 						'img':data[2],
@@ -196,7 +222,7 @@ def get_heroe(hero_id):
 			))
 			data = cursor.fetchone()
 			units_descr.append({
-				'unut': {
+				'unit': {
 					'id':data[0],
 					'name':data[1],
 					'img':data[2],
@@ -302,7 +328,7 @@ def update_hero(hero_id):
 			))
 			data = cursor.fetchone()
 			units_descr.append({
-				'unut': {
+				'unit': {
 					'id':data[0],
 					'name':data[1],
 					'img':data[2],

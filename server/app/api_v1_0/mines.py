@@ -35,6 +35,7 @@ def create_mine():
 		lng = data['lng']
 		freq = data['freq']
 		qty = data['qty']
+		supply = data['supply']
 		mine_id = str(uuid.uuid4())
 
 		location = """
@@ -64,6 +65,7 @@ def create_mine():
 				img,
 				location,
 				production,
+				supply,
 				army
 			) VALUES(
 				'{id}',
@@ -71,6 +73,7 @@ def create_mine():
 				'{img}',
 				{location},
 				{production},
+				'{supply}',
 				[]
 			)
 		""".format(
@@ -78,7 +81,8 @@ def create_mine():
 			name=name,
 			img=img,
 			location=location,
-			production=production
+			production=production,
+			supply=supply
 		))
 		
 	except Exception, error:
@@ -101,7 +105,9 @@ def create_mine():
 			'qty': qty,
 			'freq': freq
 		},
-		'army': []
+		'army': [],
+		'supply': supply,
+		'collected': None
 	}
 
 	print '\n--> Mine is created'
@@ -126,6 +132,8 @@ def get_mines():
 				m.location,
 				m.production,
 				m.army,
+				m.supply,
+				m.collected,
 				h.id,
 				h.name,
 				c.id,
@@ -187,16 +195,18 @@ def get_mines():
 			'img':el[2],
 			'location':el[3],
 			'production':el[4],
-			'army': el[5]
+			'army': el[5],
+			'supply': el[6],
+			'collected': el[7]
 		},
 		'hero': {
-			'id': el[6],
-			'name': el[7]
+			'id': el[8],
+			'name': el[9]
 		},
 		'clan': {
-			'id': el[8],
-			'name': el[9],
-			'img': el[10]
+			'id': el[10],
+			'name': el[11],
+			'img': el[12]
 		}
 	} for el in mines]
 
@@ -221,6 +231,8 @@ def get_mine(mine_id):
 				m.location,
 				m.production,
 				m.army,
+				m.supply,
+				m.collected,
 				h.id,
 				h.name,
 				c.id,
@@ -282,16 +294,18 @@ def get_mine(mine_id):
 			'img': mine[2],
 			'location': mine[3],
 			'production': mine[4],
-			'army': mine[5]
+			'army': mine[5],
+			'supply': mine[6],
+			'collected': mine[7]
 		},
 		'hero': {
-			'id': mine[6],
-			'name': mine[7]
+			'id': mine[8],
+			'name': mine[9]
 		},
 		'clan': {
-			'id': mine[8],
-			'name': mine[9],
-			'img': mine[10]
+			'id': mine[10],
+			'name': mine[11],
+			'img': mine[12]
 		}
 	}
 
@@ -323,7 +337,7 @@ def update_mine(mine_id):
 		army_sql = el if army_sql == '' else ','.join((army_sql, el))
 
 	try:
-		print '--> Selecting mines data'
+		
 		cursor.execute("""
 			UPDATE mines
 			SET army=[{army}]
@@ -341,6 +355,8 @@ def update_mine(mine_id):
 				m.location,
 				m.production,
 				m.army,
+				m.supply,
+				m.collected,
 				h.id,
 				h.name,
 				c.id,
@@ -399,16 +415,18 @@ def update_mine(mine_id):
 			'img': mine[2],
 			'location': mine[3],
 			'production': mine[4],
-			'army': mine[5]
+			'army': mine[5],
+			'supply': mine[6],
+			'collected': mine[7]
 		},
 		'hero': {
-			'id': mine[6],
-			'name': mine[7]
+			'id': mine[8],
+			'name': mine[9]
 		},
 		'clan': {
-			'id': mine[8],
-			'name': mine[9],
-			'img': mine[10]
+			'id': mine[10],
+			'name': mine[11],
+			'img': mine[12]
 		}
 	}
 
@@ -416,6 +434,123 @@ def update_mine(mine_id):
 	response.status_code = 200
 	return response
 
+
+def battle(
+	hero_id, 
+	mine_id, 
+	hero_health=None, 
+	hero_attack=None,  
+	mine_health=None, 
+	mine_attack=None):
+	hero_army_sql = ''
+	mine_army_sql = ''
+
+	connection = client.connect(g.db)
+	cursor = connection.cursor()
+
+	cursor.execute("""
+		SELECT id, attack, health
+		FROM units
+		ORDER BY attack
+	""")
+	units = cursor.fetchall()
+
+	cursor.execute("""
+		SELECT 
+			h.army
+		FROM heroes h
+		WHERE id='{hero_id}'
+	""".format(
+		hero_id=hero_id
+	))
+	hero_data = cursor.fetchone()
+	hero_army = hero_data[0]
+
+	cursor.execute("""
+		SELECT 
+			m.army, 
+			m.hero_id
+		FROM mines m
+		WHERE id='{mine_id}'
+	""".format(
+		mine_id=mine_id
+	))
+	mine_data = cursor.fetchone()
+	mine_army = mine_data[0]
+	mine_hero = mine_data[1]
+
+	if not hero_health:
+		hero_health = 0
+		hero_attack = 0
+		for hero_unit in hero_army:
+			for unit in units:
+				if unit[0] == hero_unit['unit_id']:
+					hero_attack +=  hero_unit['qty'] * int(unit[1])
+					hero_health +=  hero_unit['qty'] * int(unit[2])
+					break
+	
+	if not mine_health:
+		mine_health = 0
+		mine_attack = 0
+		for mine_unit in mine_army:
+			for unit in units:
+				if unit[0] == mine_unit['unit_id']:
+					mine_attack +=  mine_unit['qty'] * int(unit[1])
+					mine_health +=  mine_unit['qty'] * int(unit[2])
+					break
+
+	mine_health -= hero_attack
+	hero_health -= mine_attack
+
+	
+	if hero_health <= 0 or mine_health <= 0:
+		army = hero_army if hero_health > 0 else mine_army
+		health_left = hero_health if hero_health > 0 else mine_health
+
+		for unit in units:
+			unit_health = unit[2]
+			for army_unit in army:
+				if army_unit['unit_id'] == unit[0]:
+					row_health = int(army_unit['qty']) * int(unit_health)
+					if health_left < row_health:
+						killed = int((row_health-health_left)*1.0/row_health * int(army_unit['qty']))
+						army[0] = {
+							'unit_id': army_unit['unit_id'],
+							'qty': army_unit['qty'] - killed
+						}
+						print 'LAT ROW', killed
+					else:
+						print '--> Deleted', units[0][0]
+						del army[0]
+					break
+
+		army_sql = ''
+		for unit in army:
+			el = """
+					{{
+						unit_id='{unit_id}',
+						qty={qty}
+					}}
+				""".format(
+					unit_id=unit['unit_id'],
+					qty=unit['qty']
+				)
+			army_sql = el if army_sql == '' else ','.join((army_sql, el))
+
+		
+		hero_army_sql = army_sql if hero_health > 0 else ''
+		mine_army_sql = army_sql if mine_health > 0 else ''
+		
+		return hero_army_sql, mine_army_sql
+	else:
+		return battle(
+			hero_id,
+			mine_id, 
+			hero_health,
+			hero_attack, 
+			mine_health,
+			mine_attack
+		)
 
 
 @api.route('/mines/attack', methods=['POST'])
@@ -427,8 +562,6 @@ def attack_mine():
 	data = request.get_json()
 	hero_id = data['heroId']
 	mine_id = data['mineId']
-	mine_army_sql = ''
-	hero_army_sql = ''
 
 	if not hero_id:
 		return bad_request('Hero ID is not provided')
@@ -437,116 +570,7 @@ def attack_mine():
 		return bad_request('Mine ID id not provided')
 
 	try:
-		cursor.execute("""
-			SELECT 
-				h.army
-			FROM heroes h
-			WHERE id='{hero_id}'
-		""".format(
-			hero_id=hero_id
-		))
-		hero_data = cursor.fetchone()
-		hero_army = hero_data[0]
-
-		cursor.execute("""
-			SELECT 
-				m.army, 
-				m.hero_id
-			FROM mines m
-			WHERE id='{mine_id}'
-		""".format(
-			mine_id=mine_id
-		))
-		mine_data = cursor.fetchone()
-		mine_army = mine_data[0]
-		mine_hero = mine_data[1]
-
-		cursor.execute("""
-			SELECT id, attack
-			FROM units
-			ORDER BY attack
-		""")
-		units = cursor.fetchall()
-
-		hero_attack = 0
-		for hero_unit in hero_army:
-			for unit in units:
-				if unit[0] == hero_unit['unit_id']:
-					hero_attack +=  hero_unit['qty'] * unit[1]
-					break
-		
-		mine_attack = 0
-		for mine_unit in mine_army:
-			for unit in units:
-				if unit[0] == mine_unit['unit_id']:
-					mine_attack +=  mine_unit['qty'] * unit[1]
-					break
-		# print hero_attack, mine_attack
-		if hero_attack >= mine_attack:
-			diff = mine_attack
-			mine_army = []
-			for unit in units:
-				i = 0
-				for hero_unit in hero_army:
-					if unit[0] == hero_unit['unit_id']:
-						killed, remainder = divmod(diff, unit[1])
-						if killed >= hero_unit['qty']:
-							print '--> Removing unit because all killed'
-							diff -= hero_unit['qty'] * unit[1]
-							del hero_army[i]
-						elif killed > 0:
-							print '--> Updating unit qty from {0} to {1}'.format(hero_unit['qty'], hero_unit['qty'] - killed)
-							hero_army[i] = {
-								'unit_id': hero_unit['unit_id'],
-								'qty': hero_unit['qty'] - killed
-							}
-						break
-					i += 1
-
-			for unit in hero_army:
-				el = """
-						{{
-							unit_id='{unit_id}',
-							qty={qty}
-						}}
-					""".format(
-						unit_id=unit['unit_id'],
-						qty=unit['qty']
-					)
-				hero_army_sql = el if hero_army_sql == '' else ','.join((hero_army_sql, el))
-		else:
-			diff = hero_attack
-			hero_army = []
-			for unit in units:
-				i = 0
-				for mine_unit in mine_army:
-					if unit[0] == mine_unit['unit_id']:
-						killed, remainder = divmod(diff, unit[1])
-						if killed >= mine_unit['qty']:
-							print '--> Removing unit because all killed'
-							diff -= mine_unit['qty'] * unit[1]
-							del mine_army[i]
-						elif killed > 0:
-							print '--> Updating unit qty from {0} to {1}'.format(mine_unit['qty'], mine_unit['qty'] - killed)
-							diff -= killed * unit[1]
-							mine_army[i] = {
-								'unit_id': mine_unit['unit_id'],
-								'qty': mine_unit['qty'] - killed
-							}
-						break
-					i += 1
-			
-			for unit in mine_army:
-				el = """
-						{{
-							unit_id='{unit_id}',
-							qty={qty}
-						}}
-					""".format(
-						unit_id=unit['unit_id'],
-						qty=unit['qty']
-					)
-				mine_army_sql = el if mine_army_sql == '' else ','.join((mine_army_sql, el))
+		hero_army_sql, mine_army_sql = battle(hero_id, mine_id)
 
 		cursor.execute("""
 			UPDATE heroes
@@ -557,6 +581,31 @@ def attack_mine():
 			hero_id=hero_id
 		))
 		cursor.execute("""REFRESH TABLE heroes""")
+
+		if mine_army_sql == '':
+			cursor.execute("""
+				UPDATE mines
+				SET 
+					army=[{army}],
+					hero_id='{hero_id}'
+				WHERE id='{mine_id}'
+			""".format(
+				army=mine_army_sql,
+				mine_id=mine_id,
+				hero_id=hero_id
+			))
+		else:
+			cursor.execute("""
+				UPDATE mines
+				SET 
+					army=[{army}]
+				WHERE id='{mine_id}'
+			""".format(
+				army=mine_army_sql,
+				mine_id=mine_id
+			))
+		cursor.execute("""REFRESH TABLE mines""")
+
 		cursor.execute("""
 			SELECT 
 				h.id,
@@ -592,7 +641,7 @@ def attack_mine():
 			))
 			data = cursor.fetchone()
 			units_descr.append({
-				'unut': {
+				'unit': {
 					'id':data[0],
 					'name':data[1],
 					'img':data[2],
@@ -604,18 +653,7 @@ def attack_mine():
 			})
 		hero[4] = units_descr
 
-		cursor.execute("""
-			UPDATE mines
-			SET 
-				army=[{army}],
-				hero_id='{hero_id}'
-			WHERE id='{mine_id}'
-		""".format(
-			army=mine_army_sql,
-			mine_id=mine_id,
-			hero_id= hero[0] if hero_attack >= mine_attack else mine_hero
-		))
-		cursor.execute("""REFRESH TABLE mines""")
+		
 		cursor.execute("""
 			SELECT 
 				m.id,
@@ -623,7 +661,9 @@ def attack_mine():
 				m.img,
 				m.location,
 				m.production,
-				m.army
+				m.army,
+				m.supply,
+				m.collected
 			FROM mines m
 			WHERE m.id='{mine_id}'
 		""".format(
@@ -689,10 +729,209 @@ def attack_mine():
 			'img': mine[2],
 			'location': mine[3],
 			'production': mine[4],
-			'army': mine[5]
+			'army': mine[5],
+			'supply': mine[6],
+			'collected': mine[7]
 		}
 	}
 
 	response = make_response(jsonify(hero_data))
+	response.status_code = 200
+	return response
+
+
+@api.route('/mines/collect', methods=['POST'])
+def collect_mine():
+	connection = client.connect(g.db)
+	cursor = connection.cursor()
+
+	data = request.get_json()
+	hero_id = data['heroId']
+	mine_id = data['mineId']
+
+	try:
+		cursor.execute("""
+			SELECT 
+				created,
+				collected,
+				production
+			FROM mines
+			WHERE id='{mine_id}'
+		""".format(
+			mine_id=mine_id
+		))
+		mine = cursor.fetchone()
+		now = int(time.time())
+
+		created = int(mine[0])
+		collected = int(mine[1]) if mine[1] else now
+		production = mine[2]
+
+		diff = collected-created
+		iterations =  int(diff*1.0/production['freq'])
+		balance = int(iterations * production['qty'])
+
+		cursor.execute("""
+			SELECT 
+				balance
+			FROM heroes
+			WHERE id='{hero_id}'
+		""".format(
+			hero_id=hero_id
+		))
+		hero = cursor.fetchone()
+
+		print 'BAL', hero[0]
+
+		cursor.execute("""
+			UPDATE heroes
+			SET balance='{balance}'
+			WHERE id='{hero_id}'
+		""".format(
+			hero_id=hero_id,
+			balance=balance+int(hero[0])
+		))
+		cursor.execute("""REFRESH TABLE heroes""")
+
+		cursor.execute("""
+			UPDATE mines
+			SET collected='{collected}'
+			WHERE id='{mine_id}'
+		""".format(
+			mine_id=mine_id,
+			collected=int(time.time())
+		))
+		cursor.execute("""REFRESH TABLE mines""")
+
+		cursor.execute("""
+			SELECT 
+				h.id,
+				h.name,
+				h.img,
+				h.balance,
+				h.army,
+				c.id,
+				c.name,
+				c.img
+			FROM heroes h
+			LEFT JOIN clans c ON c.id = h.clan_id
+			WHERE h.id='{hero_id}'
+		""".format(
+			hero_id=hero_id
+		))
+		hero = cursor.fetchone()
+		
+		units_descr = []
+		for unit in hero[4]:
+			cursor.execute("""
+				SELECT 
+					id, 
+					name,
+					img,
+					health,
+					attack,
+					price
+				FROM units
+				WHERE id='{unit_id}'
+			""".format(
+				unit_id=unit['unit_id']
+			))
+			data = cursor.fetchone()
+			units_descr.append({
+				'unit': {
+					'id':data[0],
+					'name':data[1],
+					'img':data[2],
+					'health':data[3],
+					'attack':data[4],
+					'price':data[5]
+				},
+				'qty': unit['qty']
+			})
+		hero[4] = units_descr
+
+		
+		cursor.execute("""
+			SELECT 
+				m.id,
+				m.name,
+				m.img,
+				m.location,
+				m.production,
+				m.army,
+				m.supply,
+				m.collected
+			FROM mines m
+			WHERE m.id='{mine_id}'
+		""".format(
+			mine_id=mine_id
+		))
+		mine = cursor.fetchone()
+
+		units_descr = []
+		for unit in mine[5]:
+			cursor.execute("""
+				SELECT 
+					id, 
+					name,
+					img,
+					health,
+					attack,
+					price
+				FROM units
+				WHERE id='{unit_id}'
+			""".format(
+				unit_id=unit['unit_id']
+			))
+			data = cursor.fetchone()
+			units_descr.append({
+				'unit': {
+					'id':data[0],
+					'name':data[1],
+					'img':data[2],
+					'health':data[3],
+					'attack':data[4],
+					'price':data[5]
+				},
+				'qty': unit['qty']
+			})
+		mine[5] = units_descr
+
+
+
+	except Exception, error:
+		print 'ERROR: ', error
+		return bad_request(error)
+	finally:
+		cursor.close()
+		connection.close()
+
+
+	data = {
+		'hero': {
+			'id': hero[0],
+			'name': hero[1],
+			'img': hero[2],
+			'balance': hero[3],
+			'army': hero[4],
+			'clan': {
+				'id': hero[5],
+				'name': hero[6],
+				'img': hero[7]
+			}
+		},
+		'mine': {
+			'id': mine[0],
+			'name': mine[1],
+			'img': mine[2],
+			'location': mine[3],
+			'production': mine[4],
+			'army': mine[5],
+			'supply': mine[6],
+			'collected': mine[7]
+		}
+	}
+
+	response = make_response(jsonify(data))
 	response.status_code = 200
 	return response
